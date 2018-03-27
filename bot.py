@@ -5,6 +5,7 @@ import boto3
 import uuid
 import botocore
 import re
+import time
 from vars import *
 
 
@@ -26,7 +27,7 @@ text_messages = {
         'Держи рандомную картинку..',
 
     'history':
-        'Было загружено {} фото. Выбери количество фото, которые нужно показать',
+        'Было загружено {} фото. Выбери фото, которые нужно показать',
 }
 
 bot = telebot.AsyncTeleBot(BOT_TOKEN)
@@ -248,5 +249,11 @@ def history_pages_keyboard(start, stop, pics):
 
 wh = S3()
 db = DB()
-bot.polling()
 
+while True:
+    try:
+        bot.polling(none_stop=True)
+
+    except Exception as e:
+        print(e)
+        time.sleep(30)

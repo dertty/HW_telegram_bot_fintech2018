@@ -11,8 +11,9 @@ from vars import *
 text_messages = {
     'welcome':
         'Привет {}!\n\n'
-        'Ты можешь загружать сюда фотографии и картинки (картинки сможет увидеть любой)\n'
-        'А командой /random ты получишь рандомную картинку из всех загруженных картинок.',
+        'Ты можешь загружать сюда картинки (картинки сможет увидеть любой)\n'
+        'А командой /random ты получишь рандомную картинку из всех загруженных картинок.\n'
+        'А командой /history ты можешь посмотреть историю загруженных картинок.',
 
     'info':
         'Я - домашнее задание по курсу облачные вычисления.\n'
@@ -35,7 +36,7 @@ bot = telebot.AsyncTeleBot(BOT_TOKEN)
 def on_start(message):
     keyboard = types.InlineKeyboardMarkup()
     import_button = types.InlineKeyboardButton(text='Посмотреть рандомную картинку', callback_data='random')
-    history_button = types.InlineKeyboardButton(text='Посмотреть свои картинки', callback_data='/history')
+    history_button = types.InlineKeyboardButton(text='Посмотреть свои картинки', callback_data='history')
 
     keyboard.add(import_button)
     keyboard.add(history_button)
@@ -54,6 +55,16 @@ def handle_photo(message):
     bot.reply_to(message, text_messages['saved'])
 
 
+@bot.callback_query_handler(func=lambda reply: bool(re.search('to_(\d+)', reply.data)))
+def get_history_pages(reply):
+    text = reply.data
+    pics = db.user_pics(reply.message.chat.id)
+
+    page = int(re.search('(\d+)', text).group(0))
+    bot.edit_message_text(chat_id=reply.message.chat.id, message_id=reply.message.message_id,
+                          text=text_messages['history'].format(len(pics)),
+                          reply_markup=history_pages_keyboard(page, page+3, pics))
+
 
 @bot.callback_query_handler(func=lambda reply: bool(re.search('random', reply.data)))
 def get_random_photo_reply(reply):
@@ -67,6 +78,20 @@ def get_random_photo(message):
     bot.send_photo(chat_id=message.chat.id, photo=(wh.read(db.random_pic()[0][0])['Body']))
 
 
+@bot.message_handler(commands=['info', 'help'])
+def on_info(message):
+    keyboard = types.InlineKeyboardMarkup()
+    import_button = types.InlineKeyboardButton(text='Посмотреть рандомную картинку', callback_data='random')
+    history_button = types.InlineKeyboardButton(text='Посмотреть свои картинки', callback_data='history')
+
+    keyboard.add(import_button)
+    keyboard.add(history_button)
+
+    bot.send_message(message.chat.id,
+                     text_messages['welcome'].format(message.from_user.first_name),
+                     reply_markup=keyboard)
+
+
 @bot.message_handler(commands=['history'])
 def get_history(message):
     pics = db.user_pics(message.chat.id)
@@ -74,34 +99,27 @@ def get_history(message):
                      reply_markup=history_pages_keyboard(0, 3, pics))
 
 
-@bot.message_handler(regexp='history_(\d+)')
-@bot.callback_query_handler(func=lambda reply: bool(re.search('history_(\d+)', reply.data)))
-def get_history_photo(message):
-    text = message.text
-    pics = db.user_pics(message.chat.id)
-
-    bot.send_photo(chat_id=message.chat.id,
-                   photo=(wh.read(pics[int(re.search('(\d+)', text).group(0))][0])['Body']))
+@bot.callback_query_handler(func=lambda reply: 'history' == reply.data)
+def get_history_reply(reply):
+    pics = db.user_pics(reply.message.chat.id)
+    bot.send_message(reply.message.chat.id, text_messages['history'].format(len(pics)),
+                     reply_markup=history_pages_keyboard(0, 3, pics))
 
 
-@bot.callback_query_handler(func=lambda reply: bool(re.search('history_(\d+)', reply.data)))
-def get_history_photo(reply):
+@bot.callback_query_handler(func=lambda reply: bool(re.search('history_\d+', reply.data)))
+def get_history_photo_reply(reply):
     text = reply.data
     pics = db.user_pics(reply.message.chat.id)
 
     bot.send_photo(chat_id=reply.message.chat.id,
-                   photo=(wh.read(pics[int(re.search('(\d+)', text).group(0))][0])['Body']))
+                   photo=(wh.read(pics[int(re.search('(\d+)', text).group(0))-1][0])['Body']))
 
 
-@bot.callback_query_handler(func=lambda reply: bool(re.search('to_(\d+)', reply.data)))
-def get_history_photos(reply):
-    text = reply.data
-    pics = db.user_pics(reply.message.chat.id)
-
-    page = int(re.search('(\d+)', text).group(0))
-    bot.edit_message_text(chat_id=reply.message.chat.id, message_id=reply.message.message_id,
-                          text=text_messages['history'].format(len(pics)),
-                          reply_markup=history_pages_keyboard(page, page+3, pics))
+@bot.message_handler(regexp='history_(\d+)')
+def get_history_photo(message):
+    pics = db.user_pics(message.chat.id)
+    bot.send_photo(chat_id=message.chat.id,
+                   photo=(wh.read(pics[int(re.search('(\d+)', message.text).group(0))-1][0])['Body']))
 
 
 class DB:
